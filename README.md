@@ -165,3 +165,5 @@ The old official or main repository was a Mercurial (hg) repository at http://co
 The new Git repository is now at GitHub under https://github.com/schwabe/ics-openvpn
 
 Please read the doc/README before asking questions or starting development.
+
+Xray OVPN - WebSocket Support
