@@ -29,7 +29,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
       - name: Build the app
-        run: ./gradlew assemble${{ matrix.target }}Release
+        run: ./gradlew assemble${{ matrix.target }}Release --no-daemon --stacktrace --info
       - name: Run Unit tests
         run: ./gradlew -PtestBuildType=release test${{ matrix.target }}ReleaseUnitTest
 
