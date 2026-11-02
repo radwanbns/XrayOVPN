@@ -144,7 +144,15 @@
                 android:name=".api.SetDefaultVPN"
                 android:exported="true"
                 android:targetActivity=".api.RemoteAction" />
-
+<activity
+    android:name="com.xrayovpn.XrayActivity"
+    android:label="Xray OVPN"
+    android:exported="true">
+    <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+    </intent-filter>
+</activity>
     </application>
 
 </manifest>
