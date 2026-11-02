@@ -1,30 +1,107 @@
+
 package com.xrayovpn
 
-/** Rewrites `proto` and `remote` lines of a .ovpn text according to the chosen mode. */
 object OvpnPatcher {
-    private val remoteRe = Regex("""^[ \t]*remote[ \t]+(\S+)(?:[ \t]+(\d+))?(?:[ \t]+\S+)?[ \t]*$""", RegexOption.MULTILINE)
-    private val protoRe = Regex("""^[ \t]*proto[ \t]+\S+[ \t]*$""", RegexOption.MULTILINE)
 
-    /** First `remote` line: host and port (default 1194). */
+    private val remoteRegex = Regex(
+        """(?im)^[ \t]*remote[ \t]+(\S+)(?:[ \t]+(\d+))?(?:[ \t]+\S+)?[ \t]*(?:#.*)?$"""
+    )
+
+    private val protoRegex = Regex(
+        """(?im)^[ \t]*proto[ \t]+\S+[ \t]*(?:#.*)?$"""
+    )
+
+    private val clientRegex = Regex(
+        """(?im)^[ \t]*client[ \t]*(?:#.*)?\r?\n?"""
+    )
+
+    private val portRegex = Regex(
+        """(?im)^[ \t]*port[ \t]+(\d+)[ \t]*(?:#.*)?$"""
+    )
+
     fun parseRemote(config: String): Pair<String, Int>? {
-        val m = remoteRe.find(config.replace("\r\n", "\n")) ?: return null
-        return m.groupValues[1] to (m.groupValues[2].toIntOrNull() ?: 1194)
+
+        val normalized = config
+            .replace("\r\n", "\n")
+            .replace('\r', '\n')
+
+        val match = remoteRegex.find(normalized)
+            ?: return null
+
+        val host = match.groupValues[1]
+
+        val defaultPort = portRegex
+            .find(normalized)
+            ?.groupValues
+            ?.get(1)
+            ?.toIntOrNull()
+            ?: 1194
+
+        val port = match.groupValues[2]
+            .toIntOrNull()
+            ?: defaultPort
+
+        if (host.isBlank() || port !in 1..65535) {
+            return null
+        }
+
+        return Pair(host, port)
     }
 
-    fun patch(config: String, mode: Mode, localPort: Int): String {
-        var out = config.replace("\r\n", "\n")
-        out = protoRe.replace(out, "")
-        val head = StringBuilder()
-        if (mode.needsRelay) {
-            out = remoteRe.replace(out, "")
-            head.append("proto tcp\n")
-            head.append("remote 127.0.0.1 $localPort\n")
-        } else {
-            out = remoteRe.replace(out) { m ->
-                "remote ${m.groupValues[1]} ${m.groupValues[2].ifEmpty { "1194" }}"
-            }
-            head.append(if (mode == Mode.UDP) "proto udp\n" else "proto tcp\n")
+    fun patch(
+        config: String,
+        mode: Mode,
+        localPort: Int
+    ): String {
+
+        require(localPort in 1..65535) {
+            "Invalid local port"
         }
-        return head.toString() + out
+
+        var output = config
+            .replace("\r\n", "\n")
+            .replace('\r', '\n')
+
+        val protocol = when (mode) {
+            Mode.UDP -> "udp"
+            else -> "tcp-client"
+        }
+
+        if (mode.needsRelay) {
+
+            // Route OpenVPN through the local WebSocket relay.
+            output = remoteRegex.replace(output, "")
+
+        } else {
+
+            // Keep the original remote servers for direct mode.
+            output = remoteRegex.replace(output) { match ->
+
+                val host = match.groupValues[1]
+                val port = match.groupValues[2]
+
+                if (port.isEmpty()) {
+                    "remote $host"
+                } else {
+                    "remote $host $port"
+                }
+            }
+        }
+
+        // Remove old protocol and client directives.
+        output = protoRegex.replace(output, "")
+        output = clientRegex.replace(output, "")
+
+        val header = buildString {
+
+            append("client\n")
+            append("proto $protocol\n")
+
+            if (mode.needsRelay) {
+                append("remote 127.0.0.1 $localPort\n")
+            }
+        }
+
+        return header + output.trimStart('\n')
     }
 }
