@@ -9,6 +9,7 @@ import org.gradle.api.tasks.TaskProvider
 
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
 }
 
 fun obtainTestBuildType(): String {
